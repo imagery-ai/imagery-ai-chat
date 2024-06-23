@@ -11,12 +11,13 @@ import torch
 from io import BytesIO
 from diffusers import LEditsPPPipelineStableDiffusion
 from diffusers.utils import load_image
-from leditspp.scheduling_dpmsolver_multistep_inject import DPMSolverMultistepSchedulerInject
+from leditspp.scheduling_dpmsolver_multistep_inject import (
+    DPMSolverMultistepSchedulerInject,
+)
 from leditspp import StableDiffusionPipeline_LEDITS
 from typing import Union
 import numpy as np
 from typing import Optional
-
 
 
 load_dotenv()  # This loads the environment variables from the .env file
@@ -72,28 +73,41 @@ def load_image_fromurl(image: Union[str, PIL.Image.Image]):
     return image
 
 
-def image_grid(imgs, rows, cols, spacing = 20):
+def image_grid(imgs, rows, cols, spacing=20):
     assert len(imgs) == rows * cols
 
     w, h = imgs[0].size
 
-    grid = PIL.Image.new('RGBA', size=(cols * w + (cols-1)*spacing, rows * h + (rows-1)*spacing ), color=(255,255,255,0))
+    grid = PIL.Image.new(
+        "RGBA",
+        size=(cols * w + (cols - 1) * spacing, rows * h + (rows - 1) * spacing),
+        color=(255, 255, 255, 0),
+    )
     grid_w, grid_h = grid.size
 
     for i, img in enumerate(imgs):
-        grid.paste(img, box=( i // rows * (w+spacing), i % rows * (h+spacing)))
-        #print(( i // rows * w, i % rows * h))
+        grid.paste(img, box=(i // rows * (w + spacing), i % rows * (h + spacing)))
+        # print(( i // rows * w, i % rows * h))
     return grid
 
 
 class ImageGenerator:
     def __init__(self):
-        #self.model_name = "stabilityai/stable-diffusion-3-medium-diffusers"  # Model name
+        # self.model_name = "stabilityai/stable-diffusion-3-medium-diffusers"  # Model name
         self.model_name = "runwayml/stable-diffusion-v1-5"  # Model name
-        self.pipe = StableDiffusionPipeline_LEDITS.from_pretrained(self.model_name,safety_checker = None,)
-        self.pipe.scheduler = DPMSolverMultistepSchedulerInject.from_pretrained(self.model_name, subfolder="scheduler"
-                                                             , algorithm_type="sde-dpmsolver++", solver_order=2)
-        self.pipe = self.pipe.to("mps")  # TODO: CHANGE THIS DEPENDING ON HARDWARE (mps, cuda, intel)
+        self.pipe = StableDiffusionPipeline_LEDITS.from_pretrained(
+            self.model_name,
+            safety_checker=None,
+        )
+        self.pipe.scheduler = DPMSolverMultistepSchedulerInject.from_pretrained(
+            self.model_name,
+            subfolder="scheduler",
+            algorithm_type="sde-dpmsolver++",
+            solver_order=2,
+        )
+        self.pipe = self.pipe.to(
+            "mps"
+        )  # TODO: CHANGE THIS DEPENDING ON HARDWARE (mps, cuda, intel)
         self.image = None  # Placeholder for your initial image
 
     async def generate_new_image(self, prompt: str):
@@ -109,12 +123,16 @@ class ImageGenerator:
 
         gen = torch.manual_seed(42)
         with torch.no_grad():
-            _ = self.pipe.invert(im, num_inversion_steps=50, generator=gen, verbose=True, skip=0.15)
-            edited_image = self.pipe(editing_prompt=[prompt],
-                                        edit_threshold=[.7, .9],
-                                        edit_guidance_scale=[3, 4],
-                                        reverse_editing_direction=[False, False],
-                                        use_intersect_mask=True, )
+            _ = self.pipe.invert(
+                im, num_inversion_steps=50, generator=gen, verbose=True, skip=0.15
+            )
+            edited_image = self.pipe(
+                editing_prompt=[prompt],
+                edit_threshold=[0.7, 0.9],
+                edit_guidance_scale=[3, 4],
+                reverse_editing_direction=[False, False],
+                use_intersect_mask=True,
+            )
 
             # Update the global image
             self.image = edited_image.images[0]
@@ -150,22 +168,36 @@ class State(rx.State):
 
     # The name of the new chat.
     new_chat_name: str = ""
-      
+
     img: list[str]
 
-
-#     def __init__(
-#             self,
-#             *args,
-#             parent_state: BaseState | None = None,
-#             init_substates: bool = True,
-#             _reflex_internal_init: bool = False,
-#             **kwargs,
-#     ):
-#         super().__init__(args, parent_state, init_substates, _reflex_internal_init, kwargs)
-#         self.image_generator = ImageGenerator()
-
-
+    # def __init__(
+    #     self,
+    #     *args,
+    #     parent_state: BaseState | None = None,
+    #     init_substates: bool = True,
+    #     _reflex_internal_init: bool = False,
+    #     **kwargs,
+    # ):
+    #     super().__init__(
+    #         args, parent_state, init_substates, _reflex_internal_init, kwargs
+    #     )
+    # self.image_generator = ImageGenerator()
+    def __init__(
+        self,
+        *args,
+        parent_state: Optional[BaseState] = None,
+        init_substates: bool = True,
+        _reflex_internal_init: bool = False,
+        **kwargs,
+    ):
+        super().__init__(
+            *args,
+            parent_state=parent_state,
+            init_substates=init_substates,
+            _reflex_internal_init=_reflex_internal_init,
+            **kwargs,
+        )
 
     def create_chat(self):
         """Create a new chat."""
@@ -279,13 +311,33 @@ class State(rx.State):
 
             # Process the image to apply greyscale
             image_path = rx.get_upload_dir() / latest_qa_image.image
-            with Image.open(image_path) as img:
-                greyscale_img = img.convert("L")
+
+            """
+            call ur function (image path)
+            
+            new img
+            save the img file path
+            
+
+            """
+            gen = self.image_generator
+
+            gen.set_initial_image(image_path=image_path)
+
+            augmented_img = await gen.generate_new_image(prompt="pineapple")
+            # old stuff
+
+            # with Image.open(image_path) as img:
+            # greyscale_img = img.convert("L")
 
             # Save the greyscale image
-            new_image_name = f"greyscale_{latest_qa_image.image}"
+            # new_image_name = f"greyscale_{latest_qa_image.image}"
+            # new_image_path = image_path.parent / new_image_name
+            # greyscale_img.save(new_image_path)
+
+            new_image_name = f"augmented_{augmented_img.image}"
             new_image_path = image_path.parent / new_image_name
-            greyscale_img.save(new_image_path)
+            augmented_img.save(new_image_path)
 
             # Append the new greyscale image to the chats
             qa_image = QA(image=new_image_name)
@@ -384,4 +436,3 @@ class State(rx.State):
 
         new_image = await self.image_generator.generate_new_image(prompt)
         yield new_image
-
