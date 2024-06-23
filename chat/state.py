@@ -138,8 +138,8 @@ class ImageGenerator:
             edited_image = self.pipe(
 
                 editing_prompt=editing_prompt,
-                edit_threshold=[0.8],
-                edit_guidance_scale=[6],
+                edit_threshold=[0.8]*len(editing_prompt),
+                edit_guidance_scale=[6]*len(editing_prompt),
                 reverse_editing_direction=reverse_editing_direction,
                 use_intersect_mask=True,
             )
@@ -199,7 +199,6 @@ class State(rx.State):
             **kwargs,
         )
         self.image_generator = ImageGenerator()
-        self.count = 0
 
     #     def __init__(
     #             self,
@@ -361,13 +360,8 @@ class State(rx.State):
 
             gen.set_initial_image(image_path=image_path)
 
-            if self.count == 0:
-                augmented_img = await gen.generate_new_image(editing_prompt=["Cowboy hat"],
-                                                         reverse_editing_direction=[False,False])
-                self.count += 1
-            else:
-                augmented_img = await gen.generate_new_image(editing_prompt=["Sad face"],
-                                                         reverse_editing_direction=[False,False])
+            augmented_img = await gen.generate_new_image(editing_prompt=editing_prompt,
+                                                         reverse_editing_direction=reverse_editing_direction)
             
 
             # old stuff
