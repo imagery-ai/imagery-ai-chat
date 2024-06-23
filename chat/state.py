@@ -104,13 +104,22 @@ class ImageGenerator:
     def __init__(self):
         # self.model_name = "stabilityai/stable-diffusion-3-medium-diffusers"  # Model name
         self.model_name = "runwayml/stable-diffusion-v1-5"  # Model name
-        self.pipe = StableDiffusionPipeline_LEDITS.from_pretrained(self.model_name,safety_checker = None,)
-        self.pipe.scheduler = DPMSolverMultistepSchedulerInject.from_pretrained(self.model_name, subfolder="scheduler"
-                                                             , algorithm_type="sde-dpmsolver++", solver_order=2)
-        self.pipe = self.pipe.to("mps")  # TODO: CHANGE THIS DEPENDING ON HARDWARE (mps, cuda, intel)
+        self.pipe = StableDiffusionPipeline_LEDITS.from_pretrained(
+            self.model_name,
+            safety_checker=None,
+        )
+        self.pipe.scheduler = DPMSolverMultistepSchedulerInject.from_pretrained(
+            self.model_name,
+            subfolder="scheduler",
+            algorithm_type="sde-dpmsolver++",
+            solver_order=2,
+        )
+        self.pipe = self.pipe.to(
+            "mps"
+        )  # TODO: CHANGE THIS DEPENDING ON HARDWARE (mps, cuda, intel)
         self.image = None  # Placeholder for your initial image
 
-    async def generate_new_image(self, prompt: str):
+    async def generate_new_image(self, editing_prompt: list[str], reverse_editing_direction: list[bool]):
         """
         Input: prompt (str) - Text prompt for generating the new image.
         Result: Generates a new image based on the prompt and sets it to the global image.
@@ -127,10 +136,11 @@ class ImageGenerator:
                 im, num_inversion_steps=50, generator=gen, verbose=True, skip=0.15
             )
             edited_image = self.pipe(
-                editing_prompt=[prompt],
-                edit_threshold=[0.7, 0.9],
-                edit_guidance_scale=[3, 4],
-                reverse_editing_direction=[False, False],
+
+                editing_prompt=editing_prompt,
+                edit_threshold=[0.8],
+                edit_guidance_scale=[6],
+                reverse_editing_direction=reverse_editing_direction,
                 use_intersect_mask=True,
             )
 
@@ -151,8 +161,10 @@ class ImageGenerator:
             raise ValueError("Either image_path or image_url must be provided.")
 
 
+
 class State(rx.State):
     """The app state."""
+
 
     # A dict from the chat name to the list of questions and answers.
     chats: dict[str, list[QA]] = DEFAULT_CHATS
@@ -168,8 +180,26 @@ class State(rx.State):
 
     # The name of the new chat.
     new_chat_name: str = ""
-
+      
     img: list[str]
+
+    def __init__(
+        self,
+        *args,
+        parent_state: Optional[BaseState] = None,
+        init_substates: bool = True,
+        _reflex_internal_init: bool = False,
+        **kwargs,
+    ):
+        super().__init__(
+            *args,
+            parent_state=parent_state,
+            init_substates=init_substates,
+            _reflex_internal_init=_reflex_internal_init,
+            **kwargs,
+        )
+        self.image_generator = ImageGenerator()
+        self.count = 0
 
     #     def __init__(
     #             self,
@@ -274,7 +304,7 @@ class State(rx.State):
             form_data: The form data containing the question.
         """
         self.processing = True
-        try:
+        if True:
             question_text = form_data["question"]
             auto_reply_answer = "Processing request..."
             qa = QA(question=question_text, answer=auto_reply_answer)
@@ -318,19 +348,52 @@ class State(rx.State):
 
             # Process the image to apply greyscale
             image_path = rx.get_upload_dir() / latest_qa_image.image
-            with Image.open(image_path) as img:
-                greyscale_img = img.convert("L")
+
+            """
+            call ur function (image path)
+            
+            new img
+            save the img file path
+            
+
+            """
+            gen = self.image_generator
+
+            gen.set_initial_image(image_path=image_path)
+
+            if self.count == 0:
+                augmented_img = await gen.generate_new_image(editing_prompt=["Cowboy hat"],
+                                                         reverse_editing_direction=[False,False])
+                self.count += 1
+            else:
+                augmented_img = await gen.generate_new_image(editing_prompt=["Sad face"],
+                                                         reverse_editing_direction=[False,False])
+            
+
+            # old stuff
+
+            # with Image.open(image_path) as img:
+            # greyscale_img = img.convert("L")
 
             # Save the greyscale image
-            new_image_name = f"greyscale_{latest_qa_image.image}"
+            # new_image_name = f"greyscale_{latest_qa_image.image}"
+            # new_image_path = image_path.parent / new_image_name
+            # greyscale_img.save(new_image_path)
+            #with Image.open(augmented_img.file) as img:
+
+            # random 6 digit number
+            num = np.random.randint(100000, 999999)
+
+            new_image_name = f"augmented_{num}.png"
             new_image_path = image_path.parent / new_image_name
-            greyscale_img.save(new_image_path)
+            augmented_img.save(new_image_path)
 
             # Append the new greyscale image to the chats
             qa_image = QA(image=new_image_name)
             self.chats[self.current_chat].append(qa_image)
             print(f"Augmented image saved and appended to chat: {new_image_path}")
 
+        """
         except Exception as e:
             print(f"An error occurred while processing the image: {e}")
         finally:
@@ -338,6 +401,8 @@ class State(rx.State):
             self.chats[self.current_chat].append(qa)
             self.processing = False
             yield  # Optionally update the UI again to reflect the end of processing
+            
+        """
 
     async def openai_process_question(self, question: str):
         """Fetch response from the API and return it.
