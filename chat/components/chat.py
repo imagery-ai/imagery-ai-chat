@@ -4,7 +4,12 @@ from chat.components import loading_icon
 from chat.state import QA, State
 
 
-message_style = dict(display="inline-block", padding="1em", border_radius="8px", max_width=["30em", "30em", "50em", "50em", "50em", "50em"])
+message_style = dict(
+    display="inline-block",
+    padding="1em",
+    border_radius="8px",
+    max_width=["30em", "30em", "50em", "50em", "50em", "50em"],
+)
 
 
 def message(qa: QA) -> rx.Component:
@@ -16,28 +21,31 @@ def message(qa: QA) -> rx.Component:
     Returns:
         A component displaying the question/answer pair.
     """
-    return rx.box(
-        rx.box(
-            rx.markdown(
-                qa.question,
-                background_color=rx.color("mauve", 4),
-                color=rx.color("mauve", 12),
-                **message_style,
+    return rx.cond(
+        qa.image,
+        rx.image(src=rx.get_upload_url(qa.image), width="100%"),
+        rx.vstack(
+            rx.box(
+                rx.markdown(
+                    qa.question,
+                    background_color=rx.color("mauve", 4),
+                    color=rx.color("mauve", 12),
+                    **message_style,
+                ),
+                text_align="right",
+                margin_top="1em",
             ),
-            text_align="right",
-            margin_top="1em",
-        ),
-        rx.box(
-            rx.markdown(
-                qa.answer,
-                background_color=rx.color("accent", 4),
-                color=rx.color("accent", 12),
-                **message_style,
+            rx.box(
+                rx.markdown(
+                    qa.answer,
+                    background_color=rx.color("accent", 4),
+                    color=rx.color("accent", 12),
+                    **message_style,
+                ),
+                text_align="left",
+                padding_top="1em",
             ),
-            text_align="left",
-            padding_top="1em",
         ),
-        width="100%",
     )
 
 
@@ -53,6 +61,34 @@ def chat() -> rx.Component:
         align_self="center",
         overflow="hidden",
         padding_bottom="5em",
+    )
+
+
+def upload_box() -> rx.Component:
+    """Create an upload box for files."""
+    return rx.vstack(
+        rx.upload(
+            rx.vstack(
+                rx.button(
+                    "Select Image",
+                    color="rgb(107,99,246)",
+                    bg="white",
+                    border=f"1px solid rgb(107,99,246)",
+                ),
+                rx.text("Drag and drop an image here or click to select."),
+            ),
+            id="upload1",
+            border=f"1px dotted rgb(107,99,246)",
+            padding="5em",
+            max_files=1,  # Ensure only one file can be uploaded
+        ),
+        rx.hstack(rx.foreach(rx.selected_files("upload1"), rx.text)),
+        rx.button(
+            "Upload",
+            on_click=State.handle_upload(rx.upload_files(upload_id="upload1")),
+        ),
+        rx.foreach(State.img, lambda img: rx.image(src=rx.get_upload_url(img))),
+        padding="5em",
     )
 
 
@@ -88,7 +124,8 @@ def action_bar() -> rx.Component:
                     ),
                     is_disabled=State.processing,
                 ),
-                on_submit=State.process_question,
+                # on_submit=State.process_question,
+                on_submit=State.process_augmentation_question,
                 reset_on_submit=True,
             ),
             rx.text(
