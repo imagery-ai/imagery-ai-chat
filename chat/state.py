@@ -103,11 +103,11 @@ def image_grid(imgs, rows, cols, spacing=20):
 class ImageGenerator:
     def __init__(self):
         # self.model_name = "stabilityai/stable-diffusion-3-medium-diffusers"  # Model name
-        # self.model_name = "runwayml/stable-diffusion-v1-5"  # Model name
-        # self.pipe = StableDiffusionPipeline_LEDITS.from_pretrained(self.model_name,safety_checker = None,)
-        # self.pipe.scheduler = DPMSolverMultistepSchedulerInject.from_pretrained(self.model_name, subfolder="scheduler"
-        #                                                      , algorithm_type="sde-dpmsolver++", solver_order=2)
-        # self.pipe = self.pipe.to("mps")  # TODO: CHANGE THIS DEPENDING ON HARDWARE (mps, cuda, intel)
+        self.model_name = "runwayml/stable-diffusion-v1-5"  # Model name
+        self.pipe = StableDiffusionPipeline_LEDITS.from_pretrained(self.model_name,safety_checker = None,)
+        self.pipe.scheduler = DPMSolverMultistepSchedulerInject.from_pretrained(self.model_name, subfolder="scheduler"
+                                                             , algorithm_type="sde-dpmsolver++", solver_order=2)
+        self.pipe = self.pipe.to("mps")  # TODO: CHANGE THIS DEPENDING ON HARDWARE (mps, cuda, intel)
         self.image = None  # Placeholder for your initial image
 
     async def generate_new_image(self, prompt: str):
