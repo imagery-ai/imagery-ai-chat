@@ -101,26 +101,30 @@ def image_grid(imgs, rows, cols, spacing=20):
 
 
 class ImageGenerator:
-    def __init__(self):
-        # self.model_name = "stabilityai/stable-diffusion-3-medium-diffusers"  # Model name
-        self.model_name = "runwayml/stable-diffusion-v1-5"  # Model name
-        self.pipe = StableDiffusionPipeline_LEDITS.from_pretrained(
-            self.model_name,
-            safety_checker=None,
-        )
-        self.pipe.scheduler = DPMSolverMultistepSchedulerInject.from_pretrained(
-            self.model_name,
-            subfolder="scheduler",
-            algorithm_type="sde-dpmsolver++",
-            solver_order=2,
-        )
-        self.pipe = self.pipe.to(
-            "mps"
-        )  # TODO: CHANGE THIS DEPENDING ON HARDWARE (mps, cuda, intel)
-        self.image = None  # Placeholder for your initial image
+    # def __init__(self):
+    #     # self.model_name = "stabilityai/stable-diffusion-3-medium-diffusers"  # Model name
+    #     self.model_name = "runwayml/stable-diffusion-v1-5"  # Model name
+    #     self.pipe = StableDiffusionPipeline_LEDITS.from_pretrained(
+    #         self.model_name,
+    #         safety_checker=None,
+    #     )
+    #     self.pipe.scheduler = DPMSolverMultistepSchedulerInject.from_pretrained(
+    #         self.model_name,
+    #         subfolder="scheduler",
+    #         algorithm_type="sde-dpmsolver++",
+    #         solver_order=2,
+    #     )
+    #     self.pipe = self.pipe.to(
+    #         "mps"
+    #     )  # TODO: CHANGE THIS DEPENDING ON HARDWARE (mps, cuda, intel)
+    #     self.image = None  # Placeholder for your initial image
 
     async def generate_new_image(
-        self, editing_prompt: list[str], reverse_editing_direction: list[bool]
+        self,
+        editing_prompt: list[str],
+        reverse_editing_direction: list[bool],
+        threshold: float,
+        intensity: float,
     ):
         """
         Input: prompt (str) - Text prompt for generating the new image.
@@ -139,11 +143,13 @@ class ImageGenerator:
             )
             edited_image = self.pipe(
                 editing_prompt=editing_prompt,
-                edit_threshold=[0.8],
-                edit_guidance_scale=[6],
+                edit_threshold=[threshold],
+                edit_guidance_scale=[intensity],
                 reverse_editing_direction=reverse_editing_direction,
                 use_intersect_mask=True,
             )
+
+            print(f"threshold{threshold} | intensity{intensity}")
 
             # Update the global image
             self.image = edited_image.images[0]
@@ -182,33 +188,31 @@ class State(rx.State):
 
     img: list[str]
 
-    def __init__(
-        self,
-        *args,
-        parent_state: Optional[BaseState] = None,
-        init_substates: bool = True,
-        _reflex_internal_init: bool = False,
-        **kwargs,
-    ):
-        super().__init__(
-            *args,
-            parent_state=parent_state,
-            init_substates=init_substates,
-            _reflex_internal_init=_reflex_internal_init,
-            **kwargs,
-        )
-        self.image_generator = ImageGenerator()
+    threshold: float = 0.8  # Default threshold value
+    intensity: float = 6  # Default intensity value
 
-    #     def __init__(
-    #             self,
-    #             *args,
-    #             parent_state: BaseState | None = None,
-    #             init_substates: bool = True,
-    #             _reflex_internal_init: bool = False,
-    #             **kwargs,
-    #     ):
-    #         super().__init__(args, parent_state, init_substates, _reflex_internal_init, kwargs)
-    #         self.image_generator = ImageGenerator()
+    def update_threshold(self, value: float):
+        self.threshold = value
+
+    def update_intensity(self, value: float):
+        self.intensity = value
+
+    # def __init__(
+    #     self,
+    #     *args,
+    #     parent_state: Optional[BaseState] = None,
+    #     init_substates: bool = True,
+    #     _reflex_internal_init: bool = False,
+    #     **kwargs,
+    # ):
+    #     super().__init__(
+    #         *args,
+    #         parent_state=parent_state,
+    #         init_substates=init_substates,
+    #         _reflex_internal_init=_reflex_internal_init,
+    #         **kwargs,
+    #     )
+    #     self.image_generator = ImageGenerator()
 
     def create_chat(self):
         """Create a new chat."""
@@ -362,6 +366,8 @@ class State(rx.State):
             augmented_img = await gen.generate_new_image(
                 editing_prompt=editing_prompt,
                 reverse_editing_direction=reverse_editing_direction,
+                threshold=self.threshold,
+                intensity=self.intensity,
             )
 
             # old stuff
