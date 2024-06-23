@@ -154,6 +154,7 @@ class ImageGenerator:
 class State(rx.State):
     """The app state."""
 
+
     # A dict from the chat name to the list of questions and answers.
     chats: dict[str, list[QA]] = DEFAULT_CHATS
 
@@ -171,18 +172,7 @@ class State(rx.State):
 
     img: list[str]
 
-    # def __init__(
-    #     self,
-    #     *args,
-    #     parent_state: BaseState | None = None,
-    #     init_substates: bool = True,
-    #     _reflex_internal_init: bool = False,
-    #     **kwargs,
-    # ):
-    #     super().__init__(
-    #         args, parent_state, init_substates, _reflex_internal_init, kwargs
-    #     )
-    # self.image_generator = ImageGenerator()
+
     def __init__(
         self,
         *args,
@@ -198,6 +188,8 @@ class State(rx.State):
             _reflex_internal_init=_reflex_internal_init,
             **kwargs,
         )
+        self.image_generator = ImageGenerator()
+
 
     def create_chat(self):
         """Create a new chat."""
@@ -334,8 +326,12 @@ class State(rx.State):
             # new_image_name = f"greyscale_{latest_qa_image.image}"
             # new_image_path = image_path.parent / new_image_name
             # greyscale_img.save(new_image_path)
+            #with Image.open(augmented_img.file) as img:
 
-            new_image_name = f"augmented_{augmented_img.image}"
+            # random 6 digit number
+            num = np.random.randint(100000, 999999)
+
+            new_image_name = f"augmented_{num}.png"
             new_image_path = image_path.parent / new_image_name
             augmented_img.save(new_image_path)
 
