@@ -1,4 +1,6 @@
 import json
+
+import httpx
 from PIL import Image
 import io
 import os
@@ -348,32 +350,44 @@ class State(rx.State):
             # Process the image to apply greyscale
             image_path = rx.get_upload_dir() / latest_qa_image.image
 
-            """
-            call ur function (image path)
-            
-            new img
-            save the img file path
-            
-
-            """
+            # TODO: ADD CLOUD CALLING HERE
             gen = self.image_generator
 
+
+            """
+            
+            SET INITIAL IMAGE IN CLOUD
+            
+            url = "http://localhost:8000/upload_image/"
+            image_path = "path_to_your_image.jpg"
+            
+            with open(image_path, "rb") as image_file:
+                response = requests.post(url, files={"file": image_file})
+            
+            print(response.json())
+            
+            """
+
+
+
+            """
+            THIS IS THE LOCAL VERSION
+            
             gen.set_initial_image(image_path=image_path)
+            """
+            # THIS IS THE CLOUD VERSION:
+
+            url = "http://localhost:8000/upload_image/"
+            with open(image_path, "rb") as image_file:
+                async with httpx.AsyncClient() as client:
+                    response = await client.post(url, files={"file": image_file})
+            print(response.json())
+
+
+
 
             augmented_img = await gen.generate_new_image(editing_prompt=editing_prompt,
                                                          reverse_editing_direction=reverse_editing_direction)
-            
-
-            # old stuff
-
-            # with Image.open(image_path) as img:
-            # greyscale_img = img.convert("L")
-
-            # Save the greyscale image
-            # new_image_name = f"greyscale_{latest_qa_image.image}"
-            # new_image_path = image_path.parent / new_image_name
-            # greyscale_img.save(new_image_path)
-            #with Image.open(augmented_img.file) as img:
 
             # random 6 digit number
             num = np.random.randint(100000, 999999)
