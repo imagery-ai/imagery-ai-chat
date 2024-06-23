@@ -19,3 +19,4 @@ frontend.zip
 poetry.lock
 venv/
 .env
+uploaded_files/
