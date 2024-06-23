@@ -9,6 +9,7 @@ def index() -> rx.Component:
     return rx.chakra.vstack(
         navbar(),
         chat.chat(),
+        chat.upload_box(),
         chat.action_bar(),
         background_color=rx.color("mauve", 1),
         color=rx.color("mauve", 12),
