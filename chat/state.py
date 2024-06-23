@@ -101,25 +101,31 @@ def image_grid(imgs, rows, cols, spacing=20):
 
 
 class ImageGenerator:
-    def __init__(self):
-        # self.model_name = "stabilityai/stable-diffusion-3-medium-diffusers"  # Model name
-        self.model_name = "runwayml/stable-diffusion-v1-5"  # Model name
-        self.pipe = StableDiffusionPipeline_LEDITS.from_pretrained(
-            self.model_name,
-            safety_checker=None,
-        )
-        self.pipe.scheduler = DPMSolverMultistepSchedulerInject.from_pretrained(
-            self.model_name,
-            subfolder="scheduler",
-            algorithm_type="sde-dpmsolver++",
-            solver_order=2,
-        )
-        self.pipe = self.pipe.to(
-            "mps"
-        )  # TODO: CHANGE THIS DEPENDING ON HARDWARE (mps, cuda, intel)
-        self.image = None  # Placeholder for your initial image
+    # def __init__(self):
+    #     # self.model_name = "stabilityai/stable-diffusion-3-medium-diffusers"  # Model name
+    #     self.model_name = "runwayml/stable-diffusion-v1-5"  # Model name
+    #     self.pipe = StableDiffusionPipeline_LEDITS.from_pretrained(
+    #         self.model_name,
+    #         safety_checker=None,
+    #     )
+    #     self.pipe.scheduler = DPMSolverMultistepSchedulerInject.from_pretrained(
+    #         self.model_name,
+    #         subfolder="scheduler",
+    #         algorithm_type="sde-dpmsolver++",
+    #         solver_order=2,
+    #     )
+    #     self.pipe = self.pipe.to(
+    #         "mps"
+    #     )  # TODO: CHANGE THIS DEPENDING ON HARDWARE (mps, cuda, intel)
+    #     self.image = None  # Placeholder for your initial image
 
-    async def generate_new_image(self, editing_prompt: list[str], reverse_editing_direction: list[bool]):
+    async def generate_new_image(
+        self,
+        editing_prompt: list[str],
+        reverse_editing_direction: list[bool],
+        threshold: float,
+        intensity: float,
+    ):
         """
         Input: prompt (str) - Text prompt for generating the new image.
         Result: Generates a new image based on the prompt and sets it to the global image.
@@ -136,13 +142,14 @@ class ImageGenerator:
                 im, num_inversion_steps=50, generator=gen, verbose=True, skip=0.15
             )
             edited_image = self.pipe(
-
                 editing_prompt=editing_prompt,
-                edit_threshold=[0.8]*len(editing_prompt),
-                edit_guidance_scale=[6]*len(editing_prompt),
+                edit_threshold=[threshold]*len(editing_prompt),
+                edit_guidance_scale=[intensity]*len(editing_prompt),
                 reverse_editing_direction=reverse_editing_direction,
                 use_intersect_mask=True,
             )
+
+            print(f"threshold{threshold} | intensity{intensity}")
 
             # Update the global image
             self.image = edited_image.images[0]
@@ -161,10 +168,8 @@ class ImageGenerator:
             raise ValueError("Either image_path or image_url must be provided.")
 
 
-
 class State(rx.State):
     """The app state."""
-
 
     # A dict from the chat name to the list of questions and answers.
     chats: dict[str, list[QA]] = DEFAULT_CHATS
@@ -180,8 +185,18 @@ class State(rx.State):
 
     # The name of the new chat.
     new_chat_name: str = ""
-      
+
     img: list[str]
+
+
+    threshold: float = 0.8  # Default threshold value
+    intensity: float = 6  # Default intensity value
+
+    def update_threshold(self, value: float):
+        self.threshold = value
+
+    def update_intensity(self, value: float):
+        self.intensity = value
 
     def __init__(
         self,
@@ -200,16 +215,6 @@ class State(rx.State):
         )
         self.image_generator = ImageGenerator()
 
-    #     def __init__(
-    #             self,
-    #             *args,
-    #             parent_state: BaseState | None = None,
-    #             init_substates: bool = True,
-    #             _reflex_internal_init: bool = False,
-    #             **kwargs,
-    #     ):
-    #         super().__init__(args, parent_state, init_substates, _reflex_internal_init, kwargs)
-    #         self.image_generator = ImageGenerator()
 
     def create_chat(self):
         """Create a new chat."""
@@ -303,7 +308,7 @@ class State(rx.State):
             form_data: The form data containing the question.
         """
         self.processing = True
-        if True:
+        try:
             question_text = form_data["question"]
             auto_reply_answer = "Processing request..."
             qa = QA(question=question_text, answer=auto_reply_answer)
@@ -360,9 +365,13 @@ class State(rx.State):
 
             gen.set_initial_image(image_path=image_path)
 
-            augmented_img = await gen.generate_new_image(editing_prompt=editing_prompt,
-                                                         reverse_editing_direction=reverse_editing_direction)
-            
+            augmented_img = await gen.generate_new_image(
+                editing_prompt=editing_prompt,
+                reverse_editing_direction=reverse_editing_direction,
+                threshold=self.threshold,
+                intensity=self.intensity,
+            )
+
 
             # old stuff
 
@@ -373,7 +382,7 @@ class State(rx.State):
             # new_image_name = f"greyscale_{latest_qa_image.image}"
             # new_image_path = image_path.parent / new_image_name
             # greyscale_img.save(new_image_path)
-            #with Image.open(augmented_img.file) as img:
+            # with Image.open(augmented_img.file) as img:
 
             # random 6 digit number
             num = np.random.randint(100000, 999999)
@@ -387,16 +396,11 @@ class State(rx.State):
             self.chats[self.current_chat].append(qa_image)
             print(f"Augmented image saved and appended to chat: {new_image_path}")
 
-        """
         except Exception as e:
-            print(f"An error occurred while processing the image: {e}")
+            print(f"An error occurred at process_augmentation_question: {e}")
         finally:
-            qa = QA(question="What else do you want to augment?")
-            self.chats[self.current_chat].append(qa)
-            self.processing = False
+            self.processing = False  # End processing
             yield  # Optionally update the UI again to reflect the end of processing
-            
-        """
 
     async def openai_process_question(self, question: str):
         """Fetch response from the API and return it.
@@ -421,59 +425,6 @@ class State(rx.State):
         )
 
         return response.choices[0].message.content
-
-    # async def openai_process_question(self, question: str):
-    #     """Get the response from the API.
-
-    #     Args:
-    #         question: A dict with the current question.
-    #     """
-
-    #     # Add the question to the list of questions.
-    #     qa = QA(question=question, answer="")
-    #     self.chats[self.current_chat].append(qa)
-
-    #     # Clear the input and start the processing.
-    #     self.processing = True
-    #     yield
-
-    #     system_content = "The task involves editing an image using 'add' and 'remove' prompts. Your task is to create a JSON file with two fields which is a list: 'add' and 'remove'. Based on the prompts provided, categorize the elements to be added or removed accordingly. For example, if a prompt says to replace A with B, add B to the 'remove' field and A to the 'add' field. Only provide the resulting JSON file without any other output. The prompt will be provided after this message."
-
-    #     response = client.chat.completions.create(
-    #         model="gpt-4o",
-    #         messages=[
-    #             {"role": "system", "content": system_content},
-    #             {"role": "user", "content": question},
-    #         ],
-    #         max_tokens=4096,
-    #         temperature=0.5,
-    #     )
-
-    #     response_content = response.choices[0].message.content
-
-    #     json_data = json.loads(response_content)
-
-    #     # Initialize the resulting lists
-    #     editing_prompt = []
-    #     reverse_editing_direction = []
-
-    #     # Populate the lists based on "add" and "remove" fields
-    #     for item in json_data["add"]:
-    #         editing_prompt.append(item)
-    #         reverse_editing_direction.append(False)
-
-    #     for item in json_data["remove"]:
-    #         editing_prompt.append(item)
-    #         reverse_editing_direction.append(True)
-
-    #     # Output the results
-    #     print("editing_prompt =", editing_prompt)
-    #     print("reverse_editing_direction =", reverse_editing_direction)
-
-    #     # Toggle the processing flag.
-    #     # End the processing
-    #     self.processing = False
-    #     yield editing_prompt, reverse_editing_direction
 
     async def set_image_context(self, form_data: dict[str, str]):
         """
