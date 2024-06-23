@@ -1,3 +1,4 @@
+import base64
 import json
 
 import httpx
@@ -384,10 +385,31 @@ class State(rx.State):
             print(response.json())
 
 
-
-
+            """
+            THIS IS THE LOCAL VERSION
+            
+            
             augmented_img = await gen.generate_new_image(editing_prompt=editing_prompt,
                                                          reverse_editing_direction=reverse_editing_direction)
+            """
+            # THIS IS THE CLOUD VERSION:
+            url = "http://localhost:8000/generate_image/"
+            payload = {
+                "editing_prompt": editing_prompt,
+                "reverse_editing_direction": reverse_editing_direction
+            }
+            async with httpx.AsyncClient(timeout=httpx.Timeout(1000.0)) as client:
+                response = await client.post(url, json=payload)
+            image_data = response.json().get("image")
+            if image_data:
+                image_bytes = base64.b64decode(image_data)
+                augmented_img = Image.open(io.BytesIO(image_bytes))
+            else:
+                raise ValueError("Failed to generate image")
+
+
+
+
 
             # random 6 digit number
             num = np.random.randint(100000, 999999)
