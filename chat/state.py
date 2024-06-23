@@ -1,7 +1,10 @@
+from PIL import Image
+import io
 import os
 import reflex as rx
 from openai import OpenAI
 from dotenv import load_dotenv
+from typing import Optional
 
 load_dotenv()  # This loads the environment variables from the .env file
 
@@ -14,8 +17,11 @@ if not os.getenv("OPENAI_API_KEY"):
 class QA(rx.Base):
     """A question and answer pair."""
 
-    question: str
-    answer: str
+    # question: str
+    # answer: str
+    question: Optional[str] = None  # Set default as None to make it optional
+    answer: Optional[str] = None  # Set default as None to make it optional
+    image: Optional[str] = None  # Optional field for image
 
 
 DEFAULT_CHATS = {
@@ -40,6 +46,8 @@ class State(rx.State):
 
     # The name of the new chat.
     new_chat_name: str = ""
+
+    img: list[str]
 
     def create_chat(self):
         """Create a new chat."""
@@ -75,14 +83,104 @@ class State(rx.State):
         # Get the question from the form
         question = form_data["question"]
 
-        # Check if the question is empty
-        if question == "":
-            return
+        self.processing = True
+        qa = QA(question=question)
+        self.chats[self.current_chat].append(qa)
+        yield
 
-        model = self.openai_process_question
+        # Simulate processing the question with OpenAI (not implemented here)
+        answer = "Simulated answer for demonstration."
+        qa.answer = answer
+        yield
+        self.processing = False
+        # # Check if the question is empty
+        # if question == "":
+        #     return
 
-        async for value in model(question):
-            yield value
+        # model = self.openai_process_question
+
+        # async for value in model(question):
+        #     yield value
+
+    async def handle_upload(self, files: list[rx.UploadFile]):
+        """Handle the upload of file(s).
+
+        Args:
+            files: The uploaded files.
+        """
+        self.processing = True  # Begin processing
+        try:
+            file = files[0]  # Assuming only one file is uploaded due to max_files=1
+            upload_data = await file.read()
+            outfile = rx.get_upload_dir() / file.filename
+            with outfile.open("wb") as file_object:
+                file_object.write(upload_data)
+
+            qa_image = QA(image=file.filename)
+            self.chats[self.current_chat].append(qa_image)
+
+            # Treat the upload as a question
+            question = f"Context Image: {file.filename}."
+            answer = "What do you want to augment?"
+            qa_question = QA(question=question, answer=answer)
+            self.chats[self.current_chat].append(qa_question)
+            print("handle_upload, chat:\n", self.chats)
+
+            yield  # Allow the UI to update with the new state
+
+        except Exception as e:
+            print(f"An error occurred: {e}")
+        finally:
+            self.processing = False  # End processing
+            yield  # Optionally update the UI again to reflect the end of processing
+
+    async def process_augmentation_question(self, form_data: dict[str, str]):
+        """Process an image augmentation question.
+
+        Args:
+            form_data: The form data containing the question.
+        """
+        self.processing = True
+        try:
+            question_text = form_data["question"]
+            auto_reply_answer = "Processing request..."
+            qa = QA(question=question_text, answer=auto_reply_answer)
+            self.chats[self.current_chat].append(qa)
+            yield  # Update UI with the new question
+
+            # Find the latest QA with an image
+            latest_qa_image = None
+            for qa in reversed(self.chats[self.current_chat]):
+                if qa.image:
+                    latest_qa_image = qa
+                    break
+
+            if latest_qa_image is None:
+                print("No image found for augmentation.")
+                return
+
+            # Process the image to apply greyscale
+            image_path = rx.get_upload_dir() / latest_qa_image.image
+            with Image.open(image_path) as img:
+                greyscale_img = img.convert("L")
+
+            # Save the greyscale image
+            new_image_name = f"greyscale_{latest_qa_image.image}"
+            new_image_path = image_path.parent / new_image_name
+            greyscale_img.save(new_image_path)
+
+            # Append the new greyscale image to the chats
+            qa_image = QA(image=new_image_name)
+            self.chats[self.current_chat].append(qa_image)
+            print(f"Augmented image saved and appended to chat: {new_image_path}")
+
+        except Exception as e:
+            print(f"An error occurred while processing the image: {e}")
+        finally:
+            qa = QA(question="What else do you want to augment?")
+            self.chats[self.current_chat].append(qa)
+            self.processing = False
+            yield  # Optionally update the UI again to reflect the end of processing
 
     async def openai_process_question(self, question: str):
         """Get the response from the API.
