@@ -143,8 +143,8 @@ class ImageGenerator:
             )
             edited_image = self.pipe(
                 editing_prompt=editing_prompt,
-                edit_threshold=[threshold],
-                edit_guidance_scale=[intensity],
+                edit_threshold=[threshold]*len(editing_prompt),
+                edit_guidance_scale=[intensity]*len(editing_prompt),
                 reverse_editing_direction=reverse_editing_direction,
                 use_intersect_mask=True,
             )
@@ -188,6 +188,7 @@ class State(rx.State):
 
     img: list[str]
 
+
     threshold: float = 0.8  # Default threshold value
     intensity: float = 6  # Default intensity value
 
@@ -197,22 +198,23 @@ class State(rx.State):
     def update_intensity(self, value: float):
         self.intensity = value
 
-    # def __init__(
-    #     self,
-    #     *args,
-    #     parent_state: Optional[BaseState] = None,
-    #     init_substates: bool = True,
-    #     _reflex_internal_init: bool = False,
-    #     **kwargs,
-    # ):
-    #     super().__init__(
-    #         *args,
-    #         parent_state=parent_state,
-    #         init_substates=init_substates,
-    #         _reflex_internal_init=_reflex_internal_init,
-    #         **kwargs,
-    #     )
-    #     self.image_generator = ImageGenerator()
+    def __init__(
+        self,
+        *args,
+        parent_state: Optional[BaseState] = None,
+        init_substates: bool = True,
+        _reflex_internal_init: bool = False,
+        **kwargs,
+    ):
+        super().__init__(
+            *args,
+            parent_state=parent_state,
+            init_substates=init_substates,
+            _reflex_internal_init=_reflex_internal_init,
+            **kwargs,
+        )
+        self.image_generator = ImageGenerator()
+
 
     def create_chat(self):
         """Create a new chat."""
@@ -369,6 +371,7 @@ class State(rx.State):
                 threshold=self.threshold,
                 intensity=self.intensity,
             )
+
 
             # old stuff
 
