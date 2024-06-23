@@ -151,6 +151,7 @@ class ImageGenerator:
             raise ValueError("Either image_path or image_url must be provided.")
 
 
+
 class State(rx.State):
     """The app state."""
 
@@ -283,7 +284,7 @@ class State(rx.State):
             form_data: The form data containing the question.
         """
         self.processing = True
-        try:
+        if True:
             question_text = form_data["question"]
             auto_reply_answer = "Processing request..."
             qa = QA(question=question_text, answer=auto_reply_answer)
@@ -316,7 +317,7 @@ class State(rx.State):
 
             gen.set_initial_image(image_path=image_path)
 
-            augmented_img = await gen.generate_new_image(prompt="pineapple")
+            augmented_img = await gen.generate_new_image(prompt="cowboy hat")
             # old stuff
 
             # with Image.open(image_path) as img:
@@ -340,6 +341,7 @@ class State(rx.State):
             self.chats[self.current_chat].append(qa_image)
             print(f"Augmented image saved and appended to chat: {new_image_path}")
 
+        """
         except Exception as e:
             print(f"An error occurred while processing the image: {e}")
         finally:
@@ -347,6 +349,8 @@ class State(rx.State):
             self.chats[self.current_chat].append(qa)
             self.processing = False
             yield  # Optionally update the UI again to reflect the end of processing
+            
+        """
 
     async def openai_process_question(self, question: str):
         """Get the response from the API.
