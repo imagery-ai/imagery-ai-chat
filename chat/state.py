@@ -110,7 +110,7 @@ class ImageGenerator:
         )  # TODO: CHANGE THIS DEPENDING ON HARDWARE (mps, cuda, intel)
         self.image = None  # Placeholder for your initial image
 
-    async def generate_new_image(self, prompt: str):
+    async def generate_new_image(self, editing_prompt: list[str], reverse_editing_direction: list[bool]):
         """
         Input: prompt (str) - Text prompt for generating the new image.
         Result: Generates a new image based on the prompt and sets it to the global image.
@@ -127,10 +127,10 @@ class ImageGenerator:
                 im, num_inversion_steps=50, generator=gen, verbose=True, skip=0.15
             )
             edited_image = self.pipe(
-                editing_prompt=[prompt],
+                editing_prompt=editing_prompt,
                 edit_threshold=[0.7, 0.9],
                 edit_guidance_scale=[3, 4],
-                reverse_editing_direction=[False, False],
+                reverse_editing_direction=reverse_editing_direction,
                 use_intersect_mask=True,
             )
 
