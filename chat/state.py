@@ -128,8 +128,8 @@ class ImageGenerator:
             )
             edited_image = self.pipe(
                 editing_prompt=editing_prompt,
-                edit_threshold=[0.7, 0.9],
-                edit_guidance_scale=[3, 4],
+                edit_threshold=[0.8],
+                edit_guidance_scale=[6],
                 reverse_editing_direction=reverse_editing_direction,
                 use_intersect_mask=True,
             )
@@ -190,6 +190,7 @@ class State(rx.State):
             **kwargs,
         )
         self.image_generator = ImageGenerator()
+        self.count = 0
 
 
     def create_chat(self):
@@ -317,7 +318,15 @@ class State(rx.State):
 
             gen.set_initial_image(image_path=image_path)
 
-            augmented_img = await gen.generate_new_image(prompt="cowboy hat")
+            if self.count == 0:
+                augmented_img = await gen.generate_new_image(editing_prompt=["Cowboy hat"],
+                                                         reverse_editing_direction=[False,False])
+                self.count += 1
+            else:
+                augmented_img = await gen.generate_new_image(editing_prompt=["Sad face"],
+                                                         reverse_editing_direction=[False,False])
+            
+
             # old stuff
 
             # with Image.open(image_path) as img:
