@@ -191,6 +191,7 @@ class State(rx.State):
         _reflex_internal_init: bool = False,
         **kwargs,
     ):
+        # Call the parent class's init method with all provided arguments
         super().__init__(
             *args,
             parent_state=parent_state,
@@ -198,6 +199,8 @@ class State(rx.State):
             _reflex_internal_init=_reflex_internal_init,
             **kwargs,
         )
+        # Initialize the ImageGenerator
+        self.image_generator = ImageGenerator()
 
     def create_chat(self):
         """Create a new chat."""
