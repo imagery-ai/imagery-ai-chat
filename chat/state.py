@@ -302,7 +302,7 @@ class State(rx.State):
             form_data: The form data containing the question.
         """
         self.processing = True
-        if True:
+        try:
             question_text = form_data["question"]
             auto_reply_answer = "Processing request..."
             qa = QA(question=question_text, answer=auto_reply_answer)
@@ -386,6 +386,12 @@ class State(rx.State):
             qa_image = QA(image=new_image_name)
             self.chats[self.current_chat].append(qa_image)
             print(f"Augmented image saved and appended to chat: {new_image_path}")
+
+        except Exception as e:
+            print(f"An error occurred at process_augmentation_question: {e}")
+        finally:
+            self.processing = False  # End processing
+            yield  # Optionally update the UI again to reflect the end of processing
 
     async def openai_process_question(self, question: str):
         """Fetch response from the API and return it.
