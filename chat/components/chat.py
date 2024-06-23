@@ -93,49 +93,65 @@ def upload_box() -> rx.Component:
 
 
 def action_bar_top() -> rx.Component:
-    """The top action bar to send a new message with a text input and a send button."""
-    return rx.center(
-        rx.hstack(
-            rx.chakra.form(
-                rx.chakra.form_control(
-                    rx.hstack(
-                        rx.radix.text_field.root(
-                            rx.radix.text_field.input(
-                                placeholder="Tell us what you want us to augment...",
-                                id="question",
-                                width=[
-                                    "20em",
-                                    "26em",
-                                    "58.5em",
-                                    "65em",
-                                    "65em",
-                                    "65em",
-                                ],  # Increased width by 30%
-                            ),
-                            rx.radix.text_field.slot(
-                                rx.tooltip(
-                                    rx.icon("info", size=18),
-                                    content="Enter your augmentation prompts.",
-                                )
-                            ),
-                        ),
-                        rx.button(
-                            rx.cond(
-                                State.processing,
-                                loading_icon(height="1em"),
-                                rx.text("Send"),
-                            ),
-                            type="submit",
-                        ),
-                        align_items="center",
-                    ),
-                    is_disabled=State.processing,
+
+    upload_box = rx.vstack(
+        rx.upload(
+            rx.vstack(
+                rx.button(
+                    "Select Image",
+                    color="rgb(107,99,246)",
+                    bg="white",
+                    border=f"1px solid rgb(107,99,246)",
                 ),
-                on_submit=State.process_augmentation_question,
-                reset_on_submit=True,
+                rx.text("Drag and drop an image here or click to select."),
             ),
+            id="upload1",
+            border=f"1px dotted rgb(107,99,246)",
+            padding="2em",
+            max_files=1,  # Ensure only one file can be uploaded
+            on_drop=State.handle_upload(rx.upload_files(upload_id="upload1")),
+        ),
+        # rx.hstack(rx.foreach(rx.selected_files("upload1"), rx.text)),
+        # rx.button(
+        #     "Upload",
+        #     on_click=State.handle_upload(rx.upload_files(upload_id="upload1")),
+        # ),
+        rx.foreach(State.img, lambda img: rx.image(src=rx.get_upload_url(img))),
+        padding="5em",
+    )
+
+    threshold_slider = rx.vstack(
+        rx.text(f"Threshold: {State.threshold}"),
+        rx.slider(
+            default_value=State.threshold,  # Set the default value from the state
+            min=0,
+            max=1,
+            step=0.01,
+            orientation="horizontal",
+            width="300px",
+            on_value_commit=State.update_threshold,  # Update the state on value commit
+        ),
+    )
+
+    intensity_slider = rx.vstack(
+        rx.text(f"Intensity: {State.intensity}"),
+        rx.slider(
+            default_value=State.intensity,  # Set the default value from the state
+            min=-10,
+            max=10,
+            step=0.1,
+            orientation="horizontal",
+            width="300px",
+            on_value_commit=State.update_intensity,  # Update the state on value commit)
+        ),
+    )
+
+    combine = rx.center(
+        rx.hstack(
+            upload_box,
+            rx.vstack(threshold_slider, intensity_slider, width="100%"),
             spacing="4",
-            align_items="stretch",
+            align_items="center",
         ),
         position="sticky",
         bottom="0",
@@ -146,6 +162,64 @@ def action_bar_top() -> rx.Component:
         border_top=f"1px solid {rx.color('mauve', 3)}",
         background_color=rx.color("mauve", 2),
         width="100%",
+    )
+
+    """The top action bar to send a new message with a text input and a send button."""
+    return rx.vstack(
+        rx.center(
+            rx.hstack(
+                rx.chakra.form(
+                    rx.chakra.form_control(
+                        rx.hstack(
+                            rx.radix.text_field.root(
+                                rx.radix.text_field.input(
+                                    placeholder="Tell us what you want us to augment...",
+                                    id="question",
+                                    width=[
+                                        "20em",
+                                        "26em",
+                                        "58.5em",
+                                        "65em",
+                                        "65em",
+                                        "65em",
+                                    ],  # Increased width by 30%
+                                ),
+                                rx.radix.text_field.slot(
+                                    rx.tooltip(
+                                        rx.icon("info", size=18),
+                                        content="Enter your augmentation prompts.",
+                                    )
+                                ),
+                            ),
+                            rx.button(
+                                rx.cond(
+                                    State.processing,
+                                    loading_icon(height="1em"),
+                                    rx.text("Send"),
+                                ),
+                                type="submit",
+                            ),
+                            align_items="center",
+                        ),
+                        is_disabled=State.processing,
+                    ),
+                    on_submit=State.process_augmentation_question,
+                    reset_on_submit=True,
+                ),
+                spacing="4",
+                align_items="stretch",
+            ),
+            position="sticky",
+            bottom="0",
+            left="0",
+            padding_y="16px",
+            backdrop_filter="auto",
+            backdrop_blur="lg",
+            border_top=f"1px solid {rx.color('mauve', 3)}",
+            background_color=rx.color("mauve", 2),
+            width="100%",
+        ),
+        combine,
     )
 
 
@@ -176,21 +250,30 @@ def action_bar_top() -> rx.Component:
 
 def action_bar_bottom() -> rx.Component:
     """The bottom action bar with an upload box and sliders, styled for better aesthetics."""
-    upload_box = rx.upload(
-        rx.vstack(
-            rx.button(
-                "Select Image",
-                color="rgb(107,99,246)",
-                bg="white",
-                border=f"1px solid rgb(107,99,246)",
+    upload_box = rx.vstack(
+        rx.upload(
+            rx.vstack(
+                rx.button(
+                    "Select Image",
+                    color="rgb(107,99,246)",
+                    bg="white",
+                    border=f"1px solid rgb(107,99,246)",
+                ),
+                rx.text("Drag and drop an image here or click to select."),
             ),
-            rx.text("Drop an image"),
+            id="upload1",
+            border=f"1px dotted rgb(107,99,246)",
+            padding="2em",
+            max_files=1,  # Ensure only one file can be uploaded
+            on_drop=State.handle_upload(rx.upload_files(upload_id="upload1")),
         ),
-        id="upload2",
-        border=f"1px dotted rgb(107,99,246)",
-        padding="3em",
-        max_files=1,
-        width="50%",
+        # rx.hstack(rx.foreach(rx.selected_files("upload1"), rx.text)),
+        # rx.button(
+        #     "Upload",
+        #     on_click=State.handle_upload(rx.upload_files(upload_id="upload1")),
+        # ),
+        rx.foreach(State.img, lambda img: rx.image(src=rx.get_upload_url(img))),
+        padding="5em",
     )
 
     threshold_slider = rx.vstack(
@@ -241,20 +324,29 @@ def action_bar_bottom() -> rx.Component:
 def action_bar() -> rx.Component:
     """The action bar to send a new message."""
 
-    upload_box = rx.upload(
-        rx.vstack(
-            rx.button(
-                "Select Image",
-                color="rgb(107,99,246)",
-                bg="white",
-                border=f"1px solid rgb(107,99,246)",
+    upload_box = rx.vstack(
+        rx.upload(
+            rx.vstack(
+                rx.button(
+                    "Select Image",
+                    color="rgb(107,99,246)",
+                    bg="white",
+                    border=f"1px solid rgb(107,99,246)",
+                ),
+                rx.text("Drag and drop an image here or click to select."),
             ),
-            rx.text("Drag and drop an image here or click to select."),
+            id="upload1",
+            border=f"1px dotted rgb(107,99,246)",
+            padding="5em",
+            max_files=1,  # Ensure only one file can be uploaded
         ),
-        id="upload1",
-        border=f"1px dotted rgb(107,99,246)",
-        padding="2em",
-        max_files=1,  # Ensure only one file can be uploaded
+        rx.hstack(rx.foreach(rx.selected_files("upload1"), rx.text)),
+        rx.button(
+            "Upload",
+            on_click=State.handle_upload(rx.upload_files(upload_id="upload1")),
+        ),
+        rx.foreach(State.img, lambda img: rx.image(src=rx.get_upload_url(img))),
+        padding="5em",
     )
 
     sliders = rx.flex(

@@ -11,7 +11,7 @@ def index() -> rx.Component:
         chat.chat(),
         # chat.upload_box(),
         chat.action_bar_top(),
-        chat.action_bar_bottom(),
+        # chat.action_bar_bottom(),
         # chat.action_bar(),
         background_color=rx.color("mauve", 1),
         color=rx.color("mauve", 12),
