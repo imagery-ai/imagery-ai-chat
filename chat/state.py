@@ -1,8 +1,9 @@
+import json
 from PIL import Image
 import io
 import os
 import reflex as rx
-from openai import OpenAI
+from openai import OpenAI, AsyncOpenAI
 from dotenv import load_dotenv
 from reflex.state import BaseState
 import PIL
@@ -11,12 +12,13 @@ import torch
 from io import BytesIO
 from diffusers import LEditsPPPipelineStableDiffusion
 from diffusers.utils import load_image
-from leditspp.scheduling_dpmsolver_multistep_inject import DPMSolverMultistepSchedulerInject
+from leditspp.scheduling_dpmsolver_multistep_inject import (
+    DPMSolverMultistepSchedulerInject,
+)
 from leditspp import StableDiffusionPipeline_LEDITS
 from typing import Union
 import numpy as np
 from typing import Optional
-
 
 
 load_dotenv()  # This loads the environment variables from the .env file
@@ -24,6 +26,14 @@ load_dotenv()  # This loads the environment variables from the .env file
 # Checking if the API key is set properly
 if not os.getenv("OPENAI_API_KEY"):
     raise Exception("Please set OPENAI_API_KEY environment variable.")
+
+client = OpenAI(
+    api_key=os.getenv("OPENAI_API_KEY"),
+)
+
+async_client = AsyncOpenAI(
+    api_key=os.getenv("OPENAI_KEY"),
+)
 
 
 class QA(rx.Base):
@@ -72,28 +82,32 @@ def load_image_fromurl(image: Union[str, PIL.Image.Image]):
     return image
 
 
-def image_grid(imgs, rows, cols, spacing = 20):
+def image_grid(imgs, rows, cols, spacing=20):
     assert len(imgs) == rows * cols
 
     w, h = imgs[0].size
 
-    grid = PIL.Image.new('RGBA', size=(cols * w + (cols-1)*spacing, rows * h + (rows-1)*spacing ), color=(255,255,255,0))
+    grid = PIL.Image.new(
+        "RGBA",
+        size=(cols * w + (cols - 1) * spacing, rows * h + (rows - 1) * spacing),
+        color=(255, 255, 255, 0),
+    )
     grid_w, grid_h = grid.size
 
     for i, img in enumerate(imgs):
-        grid.paste(img, box=( i // rows * (w+spacing), i % rows * (h+spacing)))
-        #print(( i // rows * w, i % rows * h))
+        grid.paste(img, box=(i // rows * (w + spacing), i % rows * (h + spacing)))
+        # print(( i // rows * w, i % rows * h))
     return grid
 
 
 class ImageGenerator:
     def __init__(self):
-        #self.model_name = "stabilityai/stable-diffusion-3-medium-diffusers"  # Model name
-        self.model_name = "runwayml/stable-diffusion-v1-5"  # Model name
-        self.pipe = StableDiffusionPipeline_LEDITS.from_pretrained(self.model_name,safety_checker = None,)
-        self.pipe.scheduler = DPMSolverMultistepSchedulerInject.from_pretrained(self.model_name, subfolder="scheduler"
-                                                             , algorithm_type="sde-dpmsolver++", solver_order=2)
-        self.pipe = self.pipe.to("mps")  # TODO: CHANGE THIS DEPENDING ON HARDWARE (mps, cuda, intel)
+        # self.model_name = "stabilityai/stable-diffusion-3-medium-diffusers"  # Model name
+        # self.model_name = "runwayml/stable-diffusion-v1-5"  # Model name
+        # self.pipe = StableDiffusionPipeline_LEDITS.from_pretrained(self.model_name,safety_checker = None,)
+        # self.pipe.scheduler = DPMSolverMultistepSchedulerInject.from_pretrained(self.model_name, subfolder="scheduler"
+        #                                                      , algorithm_type="sde-dpmsolver++", solver_order=2)
+        # self.pipe = self.pipe.to("mps")  # TODO: CHANGE THIS DEPENDING ON HARDWARE (mps, cuda, intel)
         self.image = None  # Placeholder for your initial image
 
     async def generate_new_image(self, prompt: str):
@@ -109,12 +123,16 @@ class ImageGenerator:
 
         gen = torch.manual_seed(42)
         with torch.no_grad():
-            _ = self.pipe.invert(im, num_inversion_steps=50, generator=gen, verbose=True, skip=0.15)
-            edited_image = self.pipe(editing_prompt=[prompt],
-                                        edit_threshold=[.7, .9],
-                                        edit_guidance_scale=[3, 4],
-                                        reverse_editing_direction=[False, False],
-                                        use_intersect_mask=True, )
+            _ = self.pipe.invert(
+                im, num_inversion_steps=50, generator=gen, verbose=True, skip=0.15
+            )
+            edited_image = self.pipe(
+                editing_prompt=[prompt],
+                edit_threshold=[0.7, 0.9],
+                edit_guidance_scale=[3, 4],
+                reverse_editing_direction=[False, False],
+                use_intersect_mask=True,
+            )
 
             # Update the global image
             self.image = edited_image.images[0]
@@ -150,22 +168,19 @@ class State(rx.State):
 
     # The name of the new chat.
     new_chat_name: str = ""
-      
+
     img: list[str]
 
-
-#     def __init__(
-#             self,
-#             *args,
-#             parent_state: BaseState | None = None,
-#             init_substates: bool = True,
-#             _reflex_internal_init: bool = False,
-#             **kwargs,
-#     ):
-#         super().__init__(args, parent_state, init_substates, _reflex_internal_init, kwargs)
-#         self.image_generator = ImageGenerator()
-
-
+    #     def __init__(
+    #             self,
+    #             *args,
+    #             parent_state: BaseState | None = None,
+    #             init_substates: bool = True,
+    #             _reflex_internal_init: bool = False,
+    #             **kwargs,
+    #     ):
+    #         super().__init__(args, parent_state, init_substates, _reflex_internal_init, kwargs)
+    #         self.image_generator = ImageGenerator()
 
     def create_chat(self):
         """Create a new chat."""
@@ -266,6 +281,30 @@ class State(rx.State):
             self.chats[self.current_chat].append(qa)
             yield  # Update UI with the new question
 
+            # Process the question through OpenAI
+            response_content = await self.openai_process_question(question_text)
+            json_data = json.loads(response_content)
+
+            # Initialize the resulting lists
+            editing_prompt = []
+            reverse_editing_direction = []
+
+            # Populate the lists based on "add" and "remove" fields
+            for item in json_data["add"]:
+                editing_prompt.append(item)
+                reverse_editing_direction.append(False)
+
+            for item in json_data["remove"]:
+                editing_prompt.append(item)
+                reverse_editing_direction.append(True)
+
+            # Update the chat with the response
+            self.chats[self.current_chat][
+                -1
+            ].answer = f"Editing prompts: {editing_prompt}, Directions: {reverse_editing_direction}"
+            print("editing_prompt =", editing_prompt)
+            print("reverse_editing_direction =", reverse_editing_direction)
+
             # Find the latest QA with an image
             latest_qa_image = None
             for qa in reversed(self.chats[self.current_chat]):
@@ -301,58 +340,81 @@ class State(rx.State):
             yield  # Optionally update the UI again to reflect the end of processing
 
     async def openai_process_question(self, question: str):
-        """Get the response from the API.
+        """Fetch response from the API and return it.
 
         Args:
-            question: A dict with the current question.
+            question: str - The question text.
+
+        Returns:
+            str: The response content as a string.
         """
 
-        # Add the question to the list of questions.
-        qa = QA(question=question, answer="")
-        self.chats[self.current_chat].append(qa)
+        system_content = "The task involves editing an image using 'add' and 'remove' prompts. Your task is to create a JSON file with two fields which is a list: 'add' and 'remove'. Based on the prompts provided, categorize the elements to be added or removed accordingly."
 
-        # Clear the input and start the processing.
-        self.processing = True
-        yield
-
-        # Build the messages.
-        messages = [
-            {
-                "role": "system",
-                "content": "You are a friendly chatbot named Reflex. Respond in markdown.",
-            }
-        ]
-        for qa in self.chats[self.current_chat]:
-            messages.append({"role": "user", "content": qa.question})
-            messages.append({"role": "assistant", "content": qa.answer})
-
-        # Remove the last mock answer.
-        messages = messages[:-1]
-
-        # Start a new session to answer the question.
-        session = OpenAI().chat.completions.create(
-            model=os.getenv("OPENAI_MODEL", "gpt-3.5-turbo"),
-            messages=messages,
-            stream=True,
+        response = await async_client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": system_content},
+                {"role": "user", "content": question},
+            ],
+            max_tokens=4096,
+            temperature=0.5,
         )
 
-        # Stream the results, yielding after every word.
-        for item in session:
-            if hasattr(item.choices[0].delta, "content"):
-                answer_text = item.choices[0].delta.content
-                # Ensure answer_text is not None before concatenation
-                if answer_text is not None:
-                    self.chats[self.current_chat][-1].answer += answer_text
-                else:
-                    # Handle the case where answer_text is None, perhaps log it or assign a default value
-                    # For example, assigning an empty string if answer_text is None
-                    answer_text = ""
-                    self.chats[self.current_chat][-1].answer += answer_text
-                self.chats = self.chats
-                yield
+        return response.choices[0].message.content
 
-        # Toggle the processing flag.
-        self.processing = False
+    # async def openai_process_question(self, question: str):
+    #     """Get the response from the API.
+
+    #     Args:
+    #         question: A dict with the current question.
+    #     """
+
+    #     # Add the question to the list of questions.
+    #     qa = QA(question=question, answer="")
+    #     self.chats[self.current_chat].append(qa)
+
+    #     # Clear the input and start the processing.
+    #     self.processing = True
+    #     yield
+
+    #     system_content = "The task involves editing an image using 'add' and 'remove' prompts. Your task is to create a JSON file with two fields which is a list: 'add' and 'remove'. Based on the prompts provided, categorize the elements to be added or removed accordingly. For example, if a prompt says to replace A with B, add B to the 'remove' field and A to the 'add' field. Only provide the resulting JSON file without any other output. The prompt will be provided after this message."
+
+    #     response = client.chat.completions.create(
+    #         model="gpt-4o",
+    #         messages=[
+    #             {"role": "system", "content": system_content},
+    #             {"role": "user", "content": question},
+    #         ],
+    #         max_tokens=4096,
+    #         temperature=0.5,
+    #     )
+
+    #     response_content = response.choices[0].message.content
+
+    #     json_data = json.loads(response_content)
+
+    #     # Initialize the resulting lists
+    #     editing_prompt = []
+    #     reverse_editing_direction = []
+
+    #     # Populate the lists based on "add" and "remove" fields
+    #     for item in json_data["add"]:
+    #         editing_prompt.append(item)
+    #         reverse_editing_direction.append(False)
+
+    #     for item in json_data["remove"]:
+    #         editing_prompt.append(item)
+    #         reverse_editing_direction.append(True)
+
+    #     # Output the results
+    #     print("editing_prompt =", editing_prompt)
+    #     print("reverse_editing_direction =", reverse_editing_direction)
+
+    #     # Toggle the processing flag.
+    #     # End the processing
+    #     self.processing = False
+    #     yield editing_prompt, reverse_editing_direction
 
     async def set_image_context(self, form_data: dict[str, str]):
         """
@@ -384,4 +446,3 @@ class State(rx.State):
 
         new_image = await self.image_generator.generate_new_image(prompt)
         yield new_image
-
